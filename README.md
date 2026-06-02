@@ -985,6 +985,350 @@ Daftar fitur yang dapat dikembangkan untuk menjadikan UjianOnline sebagai platfo
 
 ---
 
+---
+
+## Rancangan Database untuk Fitur Kompetisi / Olimpiade
+
+Tabel-tabel berikut adalah tambahan dari struktur database yang sudah ada, dirancang untuk mendukung seluruh fitur kompetisi.
+
+---
+
+### Diagram Relasi Antar Tabel Baru
+
+```
+instansi (1) ──────────── (N) siswa_kompetisi
+     │
+     └──── (N) kompetisi_instansi
+
+event_kompetisi (1) ─────────────────────────────────────────────────────────┐
+     │                                                                        │
+     ├──── (N) babak_kompetisi (1) ──── (N) peserta_babak                    │
+     │              │                                                         │
+     │              └──── (N) soal (melalui soal_ujian yg sudah ada)         │
+     │                                                                        │
+     ├──── (N) registrasi_kompetisi (1) ──── (1) pembayaran                  │
+     │              │                              │                          │
+     │              └──── (N) tim_kompetisi        └──── (N) voucher_diskon  │
+     │                                                                        │
+     ├──── (N) leaderboard_kompetisi                                          │
+     ├──── (N) sertifikat_kompetisi                                           │
+     ├──── (N) proctoring_foto                                                │
+     └──── (N) kompetisi_instansi ─────────────────────────────────────────┘
+
+soal (tambahan kolom):
+     ├── level_kesulitan
+     ├── tag_topik
+     ├── pembahasan
+     └── konten_latex
+
+ujian (tambahan kolom):
+     ├── mode_penilaian (standar / bonus_waktu / penalty)
+     ├── poin_penalty
+     └── bonus_waktu_aktif
+```
+
+---
+
+### Tabel Baru
+
+---
+
+#### T1. `instansi` — Data Sekolah / Lembaga Peserta
+
+Menyimpan data instansi (sekolah/lembaga) yang mengikuti kompetisi lintas sekolah.
+
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
+| `id` | int(11) PK AI | ID instansi |
+| `nama_instansi` | varchar(200) | Nama sekolah/lembaga |
+| `npsn` | varchar(20) | Nomor Pokok Sekolah Nasional (opsional) |
+| `kota` | varchar(100) | Kota/kabupaten |
+| `provinsi` | varchar(100) | Provinsi |
+| `email` | varchar(100) | Email kontak instansi |
+| `telepon` | varchar(20) | Nomor telepon |
+| `admin_user_id` | int(11) FK | Akun admin instansi (→ `users.id`) |
+| `created_at` | timestamp | Waktu dibuat |
+
+**FK:** `admin_user_id` → `users.id`
+
+---
+
+#### T2. `event_kompetisi` — Data Event / Lomba
+
+Konfigurasi utama setiap event kompetisi/olimpiade.
+
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
+| `id` | int(11) PK AI | ID event |
+| `nama_event` | varchar(200) | Nama event (contoh: OSN Matematika 2025) |
+| `deskripsi` | text | Deskripsi dan ketentuan event |
+| `poster` | varchar(255) | Path gambar poster event |
+| `tanggal_mulai_daftar` | datetime | Batas awal pendaftaran |
+| `tanggal_tutup_daftar` | datetime | Batas akhir pendaftaran |
+| `biaya_pendaftaran` | decimal(12,2) | Biaya pendaftaran (0 = gratis) |
+| `mode_peserta` | enum('individu','tim') | Mode kompetisi individu atau beregu |
+| `maks_anggota_tim` | int(11) | Maksimal anggota per tim (null jika individu) |
+| `kuota_peserta` | int(11) | Kuota maksimal peserta (null = tidak terbatas) |
+| `is_lintas_sekolah` | tinyint(1) | 1 = kompetisi lintas instansi |
+| `status` | enum('draft','open','closed','selesai') | Status event |
+| `created_by` | int(11) FK | Admin pembuat event (→ `guru.id`) |
+| `created_at` | timestamp | Waktu dibuat |
+
+**FK:** `created_by` → `guru.id`
+
+---
+
+#### T3. `babak_kompetisi` — Babak dalam Event
+
+Setiap event dapat memiliki beberapa babak (Penyisihan, Semifinal, Final).
+
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
+| `id` | int(11) PK AI | ID babak |
+| `event_id` | int(11) FK | Referensi ke `event_kompetisi.id` |
+| `ujian_id` | int(11) FK | Ujian yang digunakan di babak ini (→ `ujian.id`) |
+| `nama_babak` | varchar(100) | Nama babak (Penyisihan, Semifinal, Final) |
+| `urutan` | int(11) | Urutan babak (1, 2, 3, ...) |
+| `kuota_lolos` | int(11) | Jumlah peserta yang lolos ke babak berikutnya (null = semua) |
+| `mode_penilaian` | enum('standar','bonus_waktu','penalty') | Mode perhitungan nilai |
+| `poin_penalty` | decimal(5,2) | Poin dikurangi tiap jawaban salah (default: 0) |
+| `bonus_waktu_aktif` | tinyint(1) | 1 = aktifkan bonus poin untuk waktu sisa |
+| `created_at` | timestamp | Waktu dibuat |
+
+**FK:** `event_id` → `event_kompetisi.id`, `ujian_id` → `ujian.id`
+
+---
+
+#### T4. `tim_kompetisi` — Data Tim Peserta
+
+Untuk event beregu, menyimpan data tim dan anggotanya.
+
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
+| `id` | int(11) PK AI | ID tim |
+| `event_id` | int(11) FK | Referensi ke `event_kompetisi.id` |
+| `nama_tim` | varchar(100) | Nama tim |
+| `instansi_id` | int(11) FK | Asal instansi tim (→ `instansi.id`) |
+| `ketua_siswa_id` | int(11) FK | Ketua tim (→ `siswa.id`) |
+| `created_at` | timestamp | Waktu dibuat |
+
+**FK:** `event_id` → `event_kompetisi.id`, `instansi_id` → `instansi.id`, `ketua_siswa_id` → `siswa.id`
+
+---
+
+#### T5. `registrasi_kompetisi` — Pendaftaran Peserta Event
+
+Menyimpan data pendaftaran setiap peserta ke suatu event.
+
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
+| `id` | int(11) PK AI | ID registrasi |
+| `event_id` | int(11) FK | Referensi ke `event_kompetisi.id` |
+| `siswa_id` | int(11) FK | Peserta (→ `siswa.id`) |
+| `tim_id` | int(11) FK | Tim (→ `tim_kompetisi.id`, null jika individu) |
+| `instansi_id` | int(11) FK | Asal instansi (→ `instansi.id`) |
+| `nomor_peserta` | varchar(50) UNIQUE | Nomor peserta yang di-generate otomatis |
+| `status_registrasi` | enum('pending','aktif','ditolak','dibatalkan') | Status pendaftaran |
+| `catatan_admin` | text | Catatan dari admin |
+| `created_at` | timestamp | Waktu mendaftar |
+
+**Index:** `unique_event_siswa` (event_id, siswa_id)
+**FK:** `event_id` → `event_kompetisi.id`, `siswa_id` → `siswa.id`
+
+---
+
+#### T6. `pembayaran` — Data Pembayaran Pendaftaran
+
+Menyimpan informasi pembayaran biaya pendaftaran peserta.
+
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
+| `id` | int(11) PK AI | ID pembayaran |
+| `registrasi_id` | int(11) FK UNIQUE | Referensi ke `registrasi_kompetisi.id` |
+| `voucher_id` | int(11) FK | Voucher digunakan (→ `voucher_diskon.id`, null jika tidak ada) |
+| `jumlah_tagihan` | decimal(12,2) | Total tagihan sebelum diskon |
+| `jumlah_diskon` | decimal(12,2) | Jumlah diskon dari voucher (default: 0) |
+| `jumlah_bayar` | decimal(12,2) | Total yang harus dibayar |
+| `kode_unik` | int(11) | Kode unik tambahan pada nominal transfer |
+| `metode_pembayaran` | enum('transfer','gateway','gratis') | Metode pembayaran |
+| `bukti_pembayaran` | varchar(255) | Path file foto bukti transfer |
+| `nama_pengirim` | varchar(100) | Nama pengirim pada bukti transfer |
+| `status_pembayaran` | enum('menunggu','terverifikasi','ditolak','refund') | Status verifikasi |
+| `catatan_verifikasi` | text | Catatan dari admin saat verifikasi |
+| `diverifikasi_oleh` | int(11) FK | Admin yang memverifikasi (→ `guru.id`) |
+| `waktu_verifikasi` | datetime | Waktu verifikasi dilakukan |
+| `payment_gateway_id` | varchar(100) | ID transaksi dari payment gateway (opsional) |
+| `payment_gateway_status` | varchar(50) | Status dari payment gateway |
+| `created_at` | timestamp | Waktu pembayaran dibuat |
+| `updated_at` | timestamp | Waktu terakhir diperbarui |
+
+**FK:** `registrasi_id` → `registrasi_kompetisi.id`, `voucher_id` → `voucher_diskon.id`
+
+---
+
+#### T7. `voucher_diskon` — Kode Voucher / Promo
+
+Kode promo untuk diskon biaya pendaftaran.
+
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
+| `id` | int(11) PK AI | ID voucher |
+| `event_id` | int(11) FK | Voucher berlaku untuk event tertentu (→ `event_kompetisi.id`, null = semua event) |
+| `kode_voucher` | varchar(50) UNIQUE | Kode yang dimasukkan peserta |
+| `jenis_diskon` | enum('nominal','persen') | Tipe potongan harga |
+| `nilai_diskon` | decimal(12,2) | Jumlah nominal atau persentase diskon |
+| `kuota` | int(11) | Jumlah maksimal pemakaian (null = tidak terbatas) |
+| `terpakai` | int(11) | Jumlah sudah terpakai (default: 0) |
+| `berlaku_sampai` | datetime | Batas waktu berlaku voucher |
+| `created_at` | timestamp | Waktu dibuat |
+
+**Index:** `kode_voucher` (UNIQUE)
+**FK:** `event_id` → `event_kompetisi.id`
+
+---
+
+#### T8. `peserta_babak` — Peserta yang Mengikuti Tiap Babak
+
+Mencatat siapa saja yang terdaftar dan lolos di setiap babak.
+
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
+| `id` | int(11) PK AI | ID record |
+| `babak_id` | int(11) FK | Referensi ke `babak_kompetisi.id` |
+| `registrasi_id` | int(11) FK | Referensi ke `registrasi_kompetisi.id` |
+| `hasil_ujian_id` | int(11) FK | Hasil ujian di babak ini (→ `hasil_ujian.id`) |
+| `nilai_akhir` | decimal(8,2) | Nilai akhir setelah perhitungan bonus/penalty |
+| `poin_bonus_waktu` | decimal(8,2) | Poin tambahan dari sisa waktu |
+| `poin_penalty` | decimal(8,2) | Total poin dikurangi akibat jawaban salah |
+| `peringkat` | int(11) | Peringkat di babak ini |
+| `status_lolos` | enum('menunggu','lolos','tidak_lolos') | Status lolos babak berikutnya |
+| `created_at` | timestamp | Waktu dibuat |
+
+**Index:** `unique_babak_peserta` (babak_id, registrasi_id)
+**FK:** `babak_id` → `babak_kompetisi.id`, `registrasi_id` → `registrasi_kompetisi.id`
+
+---
+
+#### T9. `leaderboard_kompetisi` — Papan Peringkat
+
+Snapshot peringkat peserta yang diperbarui secara berkala atau real-time.
+
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
+| `id` | int(11) PK AI | ID record |
+| `babak_id` | int(11) FK | Babak yang bersangkutan (→ `babak_kompetisi.id`) |
+| `registrasi_id` | int(11) FK | Peserta (→ `registrasi_kompetisi.id`) |
+| `nilai` | decimal(8,2) | Nilai terkini |
+| `peringkat` | int(11) | Peringkat terkini |
+| `waktu_selesai` | int(11) | Durasi pengerjaan dalam detik (untuk tiebreaker) |
+| `updated_at` | timestamp | Waktu terakhir diperbarui |
+
+**Index:** `unique_leaderboard` (babak_id, registrasi_id)
+**FK:** `babak_id` → `babak_kompetisi.id`, `registrasi_id` → `registrasi_kompetisi.id`
+
+---
+
+#### T10. `sertifikat_kompetisi` — Sertifikat Digital Peserta
+
+Menyimpan data dan path file sertifikat yang di-generate otomatis.
+
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
+| `id` | int(11) PK AI | ID sertifikat |
+| `event_id` | int(11) FK | Event terkait (→ `event_kompetisi.id`) |
+| `registrasi_id` | int(11) FK | Peserta (→ `registrasi_kompetisi.id`) |
+| `jenis_sertifikat` | enum('peserta','juara_1','juara_2','juara_3','harapan') | Jenis sertifikat |
+| `peringkat_akhir` | int(11) | Peringkat akhir peserta di event |
+| `file_path` | varchar(255) | Path file PDF sertifikat |
+| `kode_verifikasi` | varchar(64) UNIQUE | Kode unik untuk verifikasi QR code |
+| `generated_at` | datetime | Waktu sertifikat di-generate |
+| `downloaded_at` | datetime | Waktu pertama kali diunduh peserta |
+
+**Index:** `kode_verifikasi` (UNIQUE)
+**FK:** `event_id` → `event_kompetisi.id`, `registrasi_id` → `registrasi_kompetisi.id`
+
+---
+
+#### T11. `proctoring_foto` — Foto Pengawasan Selama Ujian
+
+Menyimpan foto berkala yang diambil via webcam saat peserta mengerjakan ujian.
+
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
+| `id` | int(11) PK AI | ID foto |
+| `hasil_ujian_id` | int(11) FK | Referensi ke `hasil_ujian.id` |
+| `file_path` | varchar(255) | Path file foto |
+| `status_review` | enum('belum','aman','mencurigakan') | Hasil review admin |
+| `catatan` | text | Catatan admin jika mencurigakan |
+| `captured_at` | datetime | Waktu foto diambil |
+
+**FK:** `hasil_ujian_id` → `hasil_ujian.id`
+
+---
+
+#### T12. `kompetisi_instansi` — Instansi yang Terdaftar di Event
+
+Relasi many-to-many antara event dan instansi peserta.
+
+| Kolom | Tipe | Keterangan |
+|-------|------|------------|
+| `id` | int(11) PK AI | ID record |
+| `event_id` | int(11) FK | Referensi ke `event_kompetisi.id` |
+| `instansi_id` | int(11) FK | Referensi ke `instansi.id` |
+| `jumlah_peserta` | int(11) | Jumlah peserta dari instansi ini (default: 0) |
+| `created_at` | timestamp | Waktu pendaftaran instansi |
+
+**Index:** `unique_event_instansi` (event_id, instansi_id)
+**FK:** `event_id` → `event_kompetisi.id`, `instansi_id` → `instansi.id`
+
+---
+
+### Perubahan pada Tabel yang Sudah Ada
+
+#### Tabel `soal` — Tambahan Kolom
+
+| Kolom Baru | Tipe | Keterangan |
+|------------|------|------------|
+| `level_kesulitan` | enum('mudah','sedang','sulit','olimpiade') | Tingkat kesulitan soal |
+| `tag_topik` | varchar(255) | Tag topik soal (CSV, contoh: `aljabar,geometri`) |
+| `pembahasan` | text | Teks pembahasan/solusi soal |
+| `pembahasan_gambar` | varchar(255) | Gambar pendukung pembahasan |
+| `konten_latex` | tinyint(1) | 1 = pertanyaan mengandung LaTeX (render MathJax) |
+
+#### Tabel `ujian` — Tambahan Kolom
+
+| Kolom Baru | Tipe | Keterangan |
+|------------|------|------------|
+| `event_id` | int(11) FK | Terhubung ke event kompetisi (→ `event_kompetisi.id`, null = ujian biasa) |
+| `tampilkan_pembahasan` | tinyint(1) | 1 = tampilkan pembahasan setelah ujian selesai |
+
+#### Tabel `siswa` — Tambahan Kolom
+
+| Kolom Baru | Tipe | Keterangan |
+|------------|------|------------|
+| `instansi_id` | int(11) FK | Asal instansi/sekolah (→ `instansi.id`, untuk lintas sekolah) |
+
+---
+
+### Ringkasan Semua Tabel Baru
+
+| No | Nama Tabel | Fungsi |
+|----|-----------|--------|
+| T1 | `instansi` | Data sekolah/lembaga peserta kompetisi lintas instansi |
+| T2 | `event_kompetisi` | Konfigurasi utama event/olimpiade |
+| T3 | `babak_kompetisi` | Babak-babak dalam satu event (Penyisihan, Semifinal, Final) |
+| T4 | `tim_kompetisi` | Data tim untuk kompetisi beregu |
+| T5 | `registrasi_kompetisi` | Pendaftaran peserta ke suatu event |
+| T6 | `pembayaran` | Data pembayaran dan verifikasi biaya pendaftaran |
+| T7 | `voucher_diskon` | Kode promo/diskon biaya pendaftaran |
+| T8 | `peserta_babak` | Nilai dan status lolos per babak |
+| T9 | `leaderboard_kompetisi` | Papan peringkat real-time per babak |
+| T10 | `sertifikat_kompetisi` | Sertifikat digital dengan kode QR verifikasi |
+| T11 | `proctoring_foto` | Foto webcam berkala saat ujian berlangsung |
+| T12 | `kompetisi_instansi` | Relasi event dengan instansi peserta |
+
+---
+
 ### Prioritas Pengembangan
 
 | Prioritas | Fitur | Alasan |
