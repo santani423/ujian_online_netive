@@ -967,7 +967,18 @@ Daftar fitur yang dapat dikembangkan untuk menjadikan UjianOnline sebagai platfo
 - **Kompetisi lintas sekolah** — Satu ujian dapat diikuti siswa dari banyak sekolah
 - **Laporan per instansi** — Rekap nilai dan peringkat per sekolah peserta
 
-### 10. Aksesibilitas & UX
+### 10. Sistem Pembayaran Biaya Pendaftaran
+- **Biaya pendaftaran per event** — Admin dapat menetapkan biaya pendaftaran untuk setiap kompetisi
+- **Upload bukti pembayaran** — Peserta upload foto/screenshot bukti transfer saat registrasi
+- **Verifikasi manual oleh admin** — Admin mengonfirmasi pembayaran sebelum peserta diizinkan mengikuti ujian
+- **Status pembayaran** — Peserta dapat memantau status: Menunggu Verifikasi / Terverifikasi / Ditolak
+- **Integrasi payment gateway** — Dukungan pembayaran otomatis via Midtrans, Xendit, atau Duitku (QRIS, transfer bank, e-wallet)
+- **Kode unik transfer** — Generate nominal unik tiap peserta (misal: Rp 50.003) untuk identifikasi otomatis
+- **Laporan keuangan** — Rekap total pemasukan, daftar yang sudah/belum bayar, dan export ke Excel/PDF
+- **Refund/pembatalan** — Pengelolaan pengembalian dana jika event dibatalkan
+- **Kode voucher/diskon** — Kode promo untuk peserta tertentu atau early bird
+
+### 11. Aksesibilitas & UX
 - **Mode offline/PWA** — Jawaban tersimpan lokal saat koneksi putus, sinkronisasi saat online kembali
 - **Tampilan mobile-friendly** — Antarmuka ujian yang optimal di perangkat smartphone
 - **Notifikasi jadwal** — Pengingat kompetisi via email atau integrasi WhatsApp
@@ -983,4 +994,6 @@ Daftar fitur yang dapat dikembangkan untuk menjadikan UjianOnline sebagai platfo
 | Tinggi | Sertifikat otomatis | Output yang diharapkan peserta dan panitia |
 | Sedang | Penilaian berbasis waktu/penalty | Diferensiasi dari ujian biasa |
 | Sedang | Proctoring foto berkala | Menjaga integritas kompetisi online |
+| Sedang | Sistem pembayaran (upload bukti) | Penting untuk event berbayar, implementasi sederhana |
+| Rendah | Integrasi payment gateway otomatis | Memerlukan akun merchant & integrasi API pihak ketiga |
 | Rendah | Multi-instansi/sekolah | Memerlukan redesign struktur database |
